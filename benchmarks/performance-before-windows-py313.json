@@ -1,0 +1,47 @@
+{
+  "python": "3.13.14",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "iterations": 10000,
+  "repeats": 5,
+  "cases": {
+    "stdlib_disabled": {
+      "median_ns_per_call": 60.5
+    },
+    "tix_log_disabled": {
+      "median_ns_per_call": 297.3
+    },
+    "stdlib_null_sink": {
+      "median_ns_per_call": 3340.9
+    },
+    "tix_log_null_sink": {
+      "median_ns_per_call": 2895.0
+    },
+    "evt_empty": {
+      "median_ns_per_call": 399.4
+    },
+    "evt_one": {
+      "median_ns_per_call": 1741.3
+    },
+    "evt_ten": {
+      "median_ns_per_call": 6591.6
+    },
+    "evt_ten_mixed": {
+      "median_ns_per_call": 6707.7
+    },
+    "evt_ten_values": {
+      "median_ns_per_call": 6542.3
+    },
+    "evt_mixed_snapshot": {
+      "median_ns_per_call": 476.9
+    },
+    "evt_churn_1000": {
+      "median_ns_per_call": 65578.8
+    },
+    "evt_churn_unrelated_20_topics": {
+      "median_ns_per_call": 27221.4
+    },
+    "sig_checkpoint_active": {
+      "median_ns_per_call": 125.0
+    }
+  }
+}

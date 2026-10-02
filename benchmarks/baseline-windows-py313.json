@@ -1,0 +1,16 @@
+{
+  "python": "3.13.14",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "iterations": 20000,
+  "repeats": 5,
+  "cases": {
+    "stdlib_disabled": { "median_ns_per_call": 63.0 },
+    "tix_log_disabled": { "median_ns_per_call": 355.4 },
+    "stdlib_null_sink": { "median_ns_per_call": 3377.1 },
+    "tix_log_null_sink": { "median_ns_per_call": 3101.4 },
+    "evt_empty": { "median_ns_per_call": 426.3 },
+    "evt_one": { "median_ns_per_call": 1890.7 },
+    "evt_ten": { "median_ns_per_call": 6702.5 },
+    "sig_checkpoint_active": { "median_ns_per_call": 131.2 }
+  }
+}
