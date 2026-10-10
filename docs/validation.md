@@ -1,6 +1,52 @@
 # Validation record
 
-Updated 2026-10-03 on Windows 11 (10.0.26200).
+## Custom exception rendering follow-up — 2026-10-10
+
+An additional review found that producer-captured exception text bypassed
+`JsonFormatter.formatException()` overrides. Two regression cases reproduced the
+failure for direct delivery and Tix queue delivery before the fix. JSON formatting
+now uses the current formatter whenever `exc_info` is available; captured text
+remains available after standard-library queue transport removes that information.
+Both new cases verify that custom redaction removes the sensitive exception text.
+The existing queue/pickle regression still verifies traceback preservation.
+
+Full suites passed on CPython 3.13.11 and 3.11.15: **139 passed** on each.
+Ruff, formatting, strict mypy, and `git diff --check` also passed. These checks ran
+on macOS; package builds and wheel checks below belong to the preceding review run.
+
+## Review fixes — 2026-10-10
+
+Verified on macOS 26.5.1 arm64 after the lifecycle and transport review fixes.
+
+| Check | Result |
+| --- | --- |
+| `uv run --locked pytest -q` on CPython 3.13.11 | 137 passed |
+| `uv run --locked --isolated --python 3.11 pytest -q` on CPython 3.11.15 | 137 passed |
+| `uv run --locked ruff check .` | Passed |
+| `uv run --locked ruff format --check .` | All 56 Python files passed |
+| `uv run --locked mypy` | All 24 library source modules passed strict checking |
+| `uv build --all-packages` | All three source distributions and wheels built |
+| `uv run --locked python tools/check_wheels.py` | All three wheels passed independent installation and import isolation checks |
+| `git diff --check` | Passed |
+
+Fifteen added regression cases cover interrupted owned-handler cleanup, producer
+flush barriers, later and recursive producers, concurrent flush/close ordering,
+rejection of nested queues before worker creation, exception preservation through
+standard-library queue preparation and pickle transport, and signal adapter
+reclamation, installation ownership, and reinstallation. Follow-up review found
+that reclaiming an adapter could discard pending signals; closing now restores
+handlers and delivers pending requests before the adapter can be collected. A
+regression verifies preservation of both the first shutdown request and escalation.
+
+The final structural review found no remaining blockers in these changes. Producer
+ordering stays in the existing delivery component, exception capture occurs before
+transport, and adapter lifetime uses the standard-library weak set. No dependency,
+compatibility layer, or new runtime module was introduced. The Windows/Linux CI
+matrix was not executed during this follow-up; the earlier record below is historical.
+
+## Original validation — 2026-10-03
+
+Verified on Windows 11 (10.0.26200).
 
 | Check | Result |
 | --- | --- |

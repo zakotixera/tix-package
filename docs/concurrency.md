@@ -26,6 +26,11 @@ the lock to execute processors and sinks. Close stops acceptance and waits for
 leases; callback reentry into lifecycle operations fails immediately. Level changes
 and queue statistics are synchronized. Processors may run concurrently; stateful
 custom processors must synchronize their own state. `RateLimit` does so internally.
+Leases have monotonically increasing IDs: flush waits for earlier leases before
+flushing handlers, without waiting for later producers or blocking recursive log
+calls. Flush itself holds a lease so concurrent close cannot overtake it. Handler
+cleanup collects all failures, including interruptions, attempts remaining cleanup,
+then raises an `ExceptionGroup` or `BaseExceptionGroup` as appropriate.
 
 Queue producers never hold the sink lock while waiting for space. Closing wakes
 blocked producers, and timeout does not silently discard accepted records. A worker

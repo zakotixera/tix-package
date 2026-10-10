@@ -139,7 +139,7 @@ class SignalAdapter:
         self: SignalAdapter,
     ) -> None:
         """
-        Finish owned work and release this resource.
+        Restore handlers, then deliver pending requests before releasing the adapter.
         """
         if not self._guard.owned:
             return
@@ -153,6 +153,7 @@ class SignalAdapter:
                 del _owners[number]
         self._previous.clear()
         self._installed = False
+        self.poll()
 
     def __enter__(
         self: SignalAdapter,

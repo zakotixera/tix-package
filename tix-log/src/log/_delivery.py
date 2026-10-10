@@ -38,7 +38,8 @@ class Delivery:
         self._owned: bool = owned
         self._condition: threading.Condition = threading.Condition()
         self._local: threading.local = threading.local()
-        self._active: int = 0
+        self._active: set[int] = set()
+        self._sequence: int = 0
         self._closing: bool
         self._closed: bool
         self._closing = self._closed = False
@@ -79,27 +80,23 @@ class Delivery:
     @contextmanager
     def lease(
         self: Delivery,
-        level: int | None = None,
-    ) -> Iterator[bool]:
+    ) -> Iterator[int]:
         """
-        Hold a producer lease for the duration of a managed operation.
-
-        Args:
-            level: Minimum severity or severity of the event being evaluated.
+        Hold an ordered lease for the duration of a lifecycle operation.
         """
-        enabled: bool = self.begin(level)
+        identifier: int | None = self.begin()
+        assert identifier is not None
         try:
-            yield enabled
+            yield identifier
         finally:
-            if enabled:
-                self.end()
+            self.end(identifier)
 
     def begin(
         self: Delivery,
         level: int | None = None,
-    ) -> bool:
+    ) -> int | None:
         """
-        Acquire a producer lease when the requested level is enabled.
+        Return an ordered lease ID, or None when the level is disabled.
 
         Args:
             level: Minimum severity or severity of the event being evaluated.
@@ -108,24 +105,28 @@ class Delivery:
         with self._condition:
             if self._closing:
                 raise RuntimeError("LogManager is closed")
-            enabled: bool = level is None or level >= self._level
-            if enabled:
-                self._active += 1
-                depth: int = getattr(self._local, "depth", 0) + 1
-                self._local.depth = depth
-        return enabled
+            if level is not None and level < self._level:
+                return None
+            self._sequence += 1
+            self._active.add(self._sequence)
+            depth: int = getattr(self._local, "depth", 0) + 1
+            self._local.depth = depth
+            return self._sequence
 
     def end(
         self: Delivery,
+        identifier: int,
     ) -> None:
         """
-        Release the producer lease and wake waiting closers.
+        Release a lease and wake flushers and closers.
+
+        Args:
+            identifier: Lease ID returned by begin on this thread.
         """
         with self._condition:
             self._local.depth -= 1
-            self._active -= 1
-            if self._closing and not self._active:
-                self._condition.notify_all()
+            self._active.remove(identifier)
+            self._condition.notify_all()
 
     def _check_lifecycle(
         self: Delivery,
@@ -148,7 +149,12 @@ class Delivery:
         Wait for previously accepted output to reach the sink.
         """
         self._check_lifecycle()
-        with self.lease():
+        identifier: int
+        with self.lease() as identifier:
+            with self._condition:
+                # Flush starts when its lease is the oldest still active. Later
+                # producers, including recursive logging, remain free to run.
+                self._condition.wait_for(lambda: min(self._active) == identifier)
             handler: logging.Handler
             for handler in self.handlers:
                 handler.flush()
@@ -168,25 +174,25 @@ class Delivery:
             self._closing = True
             self._closer = threading.get_ident()
             try:
-                self._condition.wait_for(lambda: self._active == 0)
+                self._condition.wait_for(lambda: not self._active)
             except BaseException:
                 self._closing = False
                 self._closer = None
                 self._condition.notify_all()
                 raise
-        errors: list[Exception] = []
+        errors: list[BaseException] = []
         try:
             handler: logging.Handler
             for handler in self.handlers:
-                error: Exception
+                error: BaseException
                 try:
                     handler.flush()
-                except Exception as error:
+                except BaseException as error:
                     errors.append(error)
                 if self._owned:
                     try:
                         handler.close()
-                    except Exception as error:
+                    except BaseException as error:
                         errors.append(error)
         finally:
             with self._condition:
@@ -194,4 +200,4 @@ class Delivery:
                 self._closer = None
                 self._condition.notify_all()
         if errors:
-            raise ExceptionGroup("Log handler cleanup failed", errors)
+            raise BaseExceptionGroup("Log handler cleanup failed", errors)

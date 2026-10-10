@@ -151,12 +151,13 @@ class LogManager:
             fields: Structured values to bind, validate, or attach to the event.
             exc_info: Whether to attach the currently handled exception.
         """
-        if not self._delivery.begin(level):
+        identifier: int | None = self._delivery.begin(level)
+        if identifier is None:
             return False
         try:
             return self._build_emit(level, message, bound, fields, exc_info)
         finally:
-            self._delivery.end()
+            self._delivery.end(identifier)
 
     def _build_emit(
         self: LogManager,
@@ -202,6 +203,8 @@ class LogManager:
             sys.exc_info() if exc_info else None,
             extra={"event": event},
         )
+        if record.exc_info:
+            event["exception"] = logging.Formatter().formatException(record.exc_info)
         if level == TRACE:
             record.levelname = "TRACE"
         # Calling handlers directly avoids logging.lastResort and global disable state.

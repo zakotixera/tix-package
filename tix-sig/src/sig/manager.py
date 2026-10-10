@@ -8,6 +8,7 @@ import asyncio
 import signal
 import threading
 import time
+import weakref
 from _thread import RLock
 from collections.abc import Callable, Iterable
 from typing import Any
@@ -57,7 +58,7 @@ class ShutdownManager:
         self._report: ShutdownReport | None = None
         self._runner_thread: int | None = None
         self._runner_task: asyncio.Task[Any] | None = None
-        self._adapters: list[SignalAdapter] = []
+        self._adapters: weakref.WeakSet[SignalAdapter] = weakref.WeakSet()
 
     @property
     def state(
@@ -129,7 +130,7 @@ class ShutdownManager:
             if self._state is State.CLOSED:
                 raise RuntimeError("ShutdownManager is closed")
             adapter: SignalAdapter = SignalAdapter(self.request, signals)
-            self._adapters.append(adapter)
+            self._adapters.add(adapter)
             return adapter
 
     def poll(

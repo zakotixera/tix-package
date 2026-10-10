@@ -105,7 +105,12 @@ inherited writes fail before touching locks, while inherited cleanup is a no-op.
 
 `JsonFormatter(dumps=...)` accepts a serializer returning `str`, and also formats
 ordinary standard-library records. Exception tracebacks are rendered separately;
-field redaction does **not** sanitize free-text messages or tracebacks. Use
+structured exceptions are captured on the producer before queue transport, so
+standard-library queue preparation and process serialization preserve them.
+When `exc_info` remains available, `JsonFormatter` calls its own `formatException()`
+so subclass rendering and redaction apply. Captured text is used when transport
+has removed the original exception information.
+Field redaction does **not** sanitize free-text messages or tracebacks. Use
 `logging.handlers.RotatingFileHandler`, `TimedRotatingFileHandler`, custom formatters, filters and
 other standard handlers directly. Caller pathname/line capture is intentionally
 omitted from the facade's hot path; use structured location fields if needed.
@@ -117,6 +122,8 @@ A blocking enqueue raises `queue.Full` when its timeout expires. `stats` is a lo
 snapshot of accepted, dropped/rejected, failed and queued counts. `last_error`
 retains the latest sink failure. Ordinary exceptions do not stop the worker; a
 fatal `BaseException` closes delivery and subsequent operations raise RuntimeError.
+The sink must not be another Tix `QueueHandler`: direct queue nesting is rejected
+at construction before another worker starts. Use one queue per delivery path.
 
 `flush(timeout=None)` waits for earlier accepted records and a sink flush.
 `close(timeout=None)` stops acceptance, wakes blocked producers, drains accepted
@@ -133,9 +140,18 @@ to keep nested values immutable. Never mutate fields concurrently with a log cal
 
 Managers borrow handlers by default: `close()` flushes but only closes them with
 `close_handlers=True`. Queue owners must explicitly close their queues, or give
-that responsibility to a manager. Manager close rejects new work and waits for
+that responsibility to a manager. Manager `flush()` waits for producer calls
+accepted before its barrier, including their processors, before flushing handlers.
+Later producers can continue; they do not extend the producer barrier. Concurrent
+flushes are ordered, and close waits for accepted flush operations as well.
+Manager close rejects new work and waits for
 accepted producer calls before flushing/closing sinks; concurrent closers wait for
 the same completion. Processor and sink callbacks run outside lifecycle locks.
+Cleanup attempts every handler's flush and owned close even when an operation
+raises `KeyboardInterrupt`, `SystemExit`, or another `BaseException`. Failures are
+reported together afterward: `ExceptionGroup` for ordinary errors, otherwise
+`BaseExceptionGroup`. Closure means all cleanup operations were attempted, not that
+every destination successfully released its resources; failed cleanup is not retried.
 Recursive flush/close from those callbacks raises instead of deadlocking. Arbitrary
 borrowed handlers still need their own safe implementation and I/O deadlines.
 

@@ -84,6 +84,11 @@ context manager installs and restores handlers. Direct users can call `install()
 and `close()`. Partial installs roll back; overlapping adapters fail; restoration
 does not overwrite handlers subsequently installed by someone else. Applications
 must choose one signal owner when a framework already manages process signals.
+The manager tracks adapters weakly. Installed OS handlers keep their adapter alive;
+after closing it and dropping application references, the adapter can be collected
+and disappears from manager polling. Close restores handlers before delivering any
+pending notifications, so leaving the scope does not lose a shutdown request.
+Retained adapters may be installed again.
 
 The Python signal handler only appends a number. `poll()`, `state`, `escalated`,
 `wait(timeout)`, `wait_async()` and cleanup drain pending requests outside signal

@@ -67,6 +67,8 @@ class QueueHandler(
             copy_fields: Whether to deep-copy structured fields before enqueueing.
             close_sink: Whether the delivery worker closes its sink during cleanup.
         """
+        if isinstance(sink, QueueHandler):
+            raise ValueError("QueueHandler requires a direct sink; nested queues are not supported")
         if not isinstance(capacity, int) or capacity < 1:
             raise ValueError("capacity must be a positive integer")
         if overflow not in {"block", "drop", "raise"}:
